@@ -16,6 +16,8 @@ func main() {
 	HandleFunc("/echo", EchoHandler)
 	HandleFunc("/work", WorkHandler)
 	HandleFunc("/worklimit", WorkLimitHandler)
+	HandleFunc("/worklimitshed", ShedLimit(WorkLimitHandler, numWorkers))
+	HandleFunc("/worklimitshedb", ShedLimitTimeout(WorkLimitHandler, numWorkers, 5*time.Millisecond))
 	log.Fatal(http.ListenAndServe(":8765", nil))
 }
 
