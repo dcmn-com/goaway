@@ -13,9 +13,9 @@ const (
 )
 
 func main() {
-	http.HandleFunc("/echo", EchoHandler)
-	http.HandleFunc("/work", WorkHandler)
-	http.HandleFunc("/worklimit", WorkLimitHandler)
+	HandleFunc("/echo", EchoHandler)
+	HandleFunc("/work", WorkHandler)
+	HandleFunc("/worklimit", WorkLimitHandler)
 	log.Fatal(http.ListenAndServe(":8765", nil))
 }
 
