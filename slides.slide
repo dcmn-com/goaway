@@ -160,3 +160,8 @@ short-circuit requests when you're overloaded
 - source code and slides at https://github.com/dcmn-com/goaway
 - wrk doesn't work, find/write a better tool next time
 - I can't get a useful graph out of prometheus
+
+* Audience input
+
+- vegeta (https://github.com/tsenart/vegeta) as an alternative to wrk
+- Google's SRE book as a recommended complementary read, e.g.: https://landing.google.com/sre/book/chapters/handling-overload.html
