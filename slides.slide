@@ -1,0 +1,162 @@
+Go away
+28 Jun 2017
+Tags: go, http, overload, shedding
+
+Robert Vollmert
+
+* When are you overloaded?
+
+- when you get more requests per time unit than you can handle in that time
+
+* When are you overloaded? Graph!
+
+- when you get more requests per time unit than you can handle in that time
+
+.image graphite.png _ 500
+
+- not that easy to detect reliably automatically
+- traffic spikes vs broad traffic patterns
+
+* What to do when you're overloaded?
+
+- just keep going
+- but tell the client it's going to take a while?
+- scale up (but what if you can't?)
+- shedding
+
+* An example
+
+  +package main
+  +
+  +import (
+  +       "io"
+  +       "log"
+  +       "net/http"
+  +)
+  +
+  +func main() {
+  +       http.HandleFunc("/echo", EchoHandler)
+  +       log.Fatal(http.ListenAndServe(":8765", nil))
+  +}
+  +
+  +func EchoHandler(w http.ResponseWriter, r *http.Request) {
+  +       w.WriteHeader(http.StatusOK)
+  +       w.Header().Set("Content-Type", "text/plain")
+  +       io.Copy(w, r.Body)
+  +}
+
+* Ok, that was boring
+
+  _import (
+          "io"
+          "log"
+          "net/http"
+  +       "time"
+   )
+  
+   func main() {
+          http.HandleFunc("/echo", EchoHandler)
+  +       http.HandleFunc("/work", WorkHandler)
+          log.Fatal(http.ListenAndServe(":8765", nil))
+   }
+  
+  +func work() {
+  +       time.Sleep(50*time.Millisecond)
+  +}
+  +
+  +func WorkHandler(w http.ResponseWriter, r *http.Request) {
+  +       work()
+  +       EchoHandler(w, r)
+  +}
+
+* Life of a (bid) request
+
+- read and parse request
+- look up user
+- make a bid
+- format and send response
+
+* And this is where things start to break down
+
+  _func main() {
+          http.HandleFunc("/echo", EchoHandler)
+          http.HandleFunc("/work", WorkHandler)
+  +       http.HandleFunc("/worklimit", WorkLimitHandler)
+          log.Fatal(http.ListenAndServe(":8765", nil))
+   }
+  
+  +var workers = make(chan struct{}, numWorkers)
+  +
+  +func WorkLimitHandler(w http.ResponseWriter, r *http.Request) {
+  +       workers <- struct{}{}
+  +       WorkHandler(w, r)
+  +       <-workers
+  +}
+
+* On call centers
+
+- queue
+- tell?
+- stack!
+
+* On queueing
+
+- net/http is an implicit queue, watch the goroutine count go up as you overload
+- converting to a stack is not straightforward, but fun
+
+* What is load shedding?
+
+short-circuit requests when you're overloaded
+
+- 503
+- static / cached copy
+- no bid
+
+* Approaches to load shedding
+
+- limit number of concurrent requests
+
+* Limit number of concurrent requests
+
+  _func main() {
+          http.HandleFunc("/echo", EchoHandler)
+          http.HandleFunc("/work", WorkHandler)
+          http.HandleFunc("/worklimit", WorkLimitHandler)
+  +       http.HandleFunc("/worklimitshed", ShedLimit(WorkLimitHandler, 4))
+          log.Fatal(http.ListenAndServe(":8765", nil))
+   }
+  
+  +func ShedLimit(handle http.HandlerFunc, maxConcurrent int) http.HandlerFunc {
+  +       reqs := make(chan struct{}, maxConcurrent)
+  +       return func(w http.ResponseWriter, r *http.Request) {
+  +               select {
+  +               case reqs <- struct{}{}:
+  +                       handle(w, r)
+  +                       <-reqs
+  +               default:
+  +                       http.Error(w, "overloaded", 503)
+  +               }
+  +       }
+  +}
+
+* Approaches to load shedding (2)
+
+- limit number of concurrent requests
+- queue requests briefly
+
+  _select {
+   case reqs <- struct{}{}:
+            handle(w, r)
+            <-reqs
+  -default:
+  +case <-time.After(5 * time.Millisecond):
+            http.Error(w, "overloaded", 503)
+   }
+
+- stacks!
+
+* Closing
+
+- source code and slides at https://github.com/dcmn-com/goaway
+- wrk doesn't work, find/write a better tool next time
+- I can't get a useful graph out of prometheus
